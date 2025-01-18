@@ -12,7 +12,8 @@ app.use(bodyParser.urlencoded({ extended: true }));
 
 // Rutas
 app.use("/api/bot", require("./routes/botRoutes"));
-//app.use("/api/cart", require("./routes/cartRoutes"));
+app.use("/api/cart", require("./routes/cartRoutes"));
+app.use("/api/users", require("./routes/userRoutes"));
 
 // Servidor
 const PORT = process.env.PORT || 5000;
