@@ -4,6 +4,6 @@ const router = express.Router();
 const authMiddleware = require("../middleware/authMiddleware");
 
 router.get("/recommendations/:userId", getUserRecommendations);
-router.post("/send-message", authMiddleware, sendMessageTest);
+router.post("/send-message", authMiddleware.authenticateToken, sendMessageTest);
 
 module.exports = router;

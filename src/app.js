@@ -1,5 +1,4 @@
 const express = require("express");
-const bodyParser = require("body-parser");
 const connectDB = require("./config/dbConfig");
 require("dotenv").config();
 
@@ -7,8 +6,9 @@ const app = express();
 connectDB();
 
 // Middlewares
-app.use(bodyParser.json());
-app.use(bodyParser.urlencoded({ extended: true }));
+app.use(express.json());
+app.use(express.urlencoded({ extended: true }));
+
 
 // Rutas
 app.use("/api/bot", require("./routes/botRoutes"));

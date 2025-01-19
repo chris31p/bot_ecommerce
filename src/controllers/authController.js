@@ -1,73 +1,111 @@
-const bcrypt = require("bcryptjs");
-const jwt = require("jsonwebtoken");
+const bcrypt = require("bcryptjs"); // Para el hashing de contraseñas
+const jwt = require("jsonwebtoken"); // Para generar tokens JWT
 const User = require("../models/User");
+const Cart = require("../models/Cart"); // Modelo del carrito
 
-// Crear usuario (registro)
-exports.register = async (req, res) => {
+// Llave secreta para JWT (debería estar en una variable de entorno)
+const JWT_SECRET = process.env.JWT_SECRET || "tu_llave_secreta";
+
+// Controlador para registrar un usuario y crear un carrito vacío
+exports.registerUser = async (req, res) => {
+  const { name, phone, email, password } = req.body;
+
   try {
-    const { username, email, password } = req.body;
-
-    // Verificar si el email ya está registrado
-    const existingUser = await User.findOne({ email });
+    // Verifica si ya existe un usuario con el mismo teléfono o correo
+    const existingUser = await User.findOne({ $or: [{ phone }, { email }] });
     if (existingUser) {
-      return res.status(400).json({ message: "El correo ya está registrado." });
+      return res.status(400).json({
+        message: "El teléfono o correo ya están registrados.",
+      });
     }
 
-    // Hashear la contraseña
+    // Hashea la contraseña
     const hashedPassword = await bcrypt.hash(password, 10);
 
-    // Crear el usuario
-    const newUser = new User({
-      username,
-      email,
-      password: hashedPassword,
-    });
+    // Crea un nuevo usuario
+    const user = new User({ name, phone, email, password: hashedPassword });
 
-    await newUser.save();
-    res.status(201).json({ message: "Usuario registrado exitosamente." });
+    // Guarda el usuario temporalmente para obtener su ID
+    await user.save();
+
+    // Crea un carrito vacío y asígnalo al usuario
+    const cart = new Cart({ items: [], total: 0 });
+    await cart.save();
+
+    // Vincula el carrito al usuario
+    user.cart = cart._id;
+    await user.save();
+
+    res.status(201).json({
+      message: "Usuario registrado y carrito creado con éxito.",
+      user: {
+        id: user._id,
+        name: user.name,
+        phone: user.phone,
+        email: user.email,
+        cart: user.cart,
+      },
+    });
   } catch (error) {
-    res.status(500).json({ message: "Error al registrar el usuario.", error });
+    console.error(error);
+    res.status(500).json({
+      message: "Error al registrar el usuario.",
+      error,
+    });
   }
 };
 
-// Login de usuario
-exports.login = async (req, res) => {
-  try {
-    const { email, password } = req.body;
+// Controlador para el login de usuario
+exports.loginUser = async (req, res) => {
+  const { email, password } = req.body;
 
-    // Verificar si el usuario existe
-    const user = await User.findOne({ email });
+  try {
+    // Busca al usuario por correo
+    const user = await User.findOne({ email }).populate("cart");
+
     if (!user) {
-      return res.status(404).json({ message: "Usuario no encontrado." });
+      return res.status(404).json({
+        message: "Usuario no encontrado.",
+      });
     }
 
-    // Comparar contraseñas
+    // Verifica la contraseña
     const isPasswordValid = await bcrypt.compare(password, user.password);
+
     if (!isPasswordValid) {
-      return res.status(401).json({ message: "Contraseña incorrecta." });
+      return res.status(401).json({
+        message: "Contraseña incorrecta.",
+      });
     }
 
-    // Generar el token JWT
-    const token = jwt.sign({ id: user._id }, process.env.JWT_SECRET, {
-      expiresIn: "1h", // Token válido por 1 hora
+    // Genera un token JWT
+    const token = jwt.sign(
+      {
+        id: user._id,
+        email: user.email,
+        name: user.name,
+        phone: user.phone,
+      },
+      JWT_SECRET,
+      { expiresIn: "1h" } // Token válido por 1 hora
+    );
+
+    res.status(200).json({
+      message: "Login exitoso.",
+      user: {
+        id: user._id,
+        name: user.name,
+        email: user.email,
+        phone: user.phone,
+        cart: user.cart,
+      },
+      token,
     });
-
-    res.status(200).json({ message: "Login exitoso.", token });
   } catch (error) {
-    res.status(500).json({ message: "Error al iniciar sesión.", error });
-  }
-};
-
-// Verificar usuario (opcional)
-exports.verifyUser = async (req, res) => {
-  try {
-    const { id } = req.user; // `id` proviene del token JWT decodificado
-    const user = await User.findById(id);
-    if (!user) {
-      return res.status(404).json({ message: "Usuario no encontrado." });
-    }
-    res.status(200).json({ message: "Usuario verificado.", user });
-  } catch (error) {
-    res.status(500).json({ message: "Error al verificar el usuario.", error });
+    console.error(error);
+    res.status(500).json({
+      message: "Error al iniciar sesión.",
+      error,
+    });
   }
 };
